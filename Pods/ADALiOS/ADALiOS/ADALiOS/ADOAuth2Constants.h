@@ -24,6 +24,7 @@ extern NSString *const OAUTH2_AUTHORIZATION_CODE;
 extern NSString *const OAUTH2_AUTHORIZATION_URI;
 extern NSString *const OAUTH2_AUTHORITY;
 extern NSString *const OAUTH2_AUTHORIZE_SUFFIX;
+extern NSString *const OAUTH2_AUTHORIZE_V1_SUFFIX;
 extern NSString *const OAUTH2_BEARER;
 extern NSString *const OAUTH2_CLIENT_ID;
 extern NSString *const OAUTH2_CLIENT_SECRET;
@@ -31,8 +32,10 @@ extern NSString *const OAUTH2_CODE;
 extern NSString *const OAUTH2_ERROR;
 extern NSString *const OAUTH2_ERROR_DESCRIPTION;
 extern NSString *const OAUTH2_EXPIRES_IN;
+extern NSString *const OAUTH2_ID_TOKEN_EXPIRES_IN;
 extern NSString *const OAUTH2_GRANT_TYPE;
 extern NSString *const OAUTH2_PLATFORM_ID;
+extern NSString *const OAUTH2_POLICY;
 extern NSString *const OAUTH2_REALM;
 extern NSString *const OAUTH2_REDIRECT_URI;
 extern NSString *const OAUTH2_REFRESH_TOKEN;
@@ -46,12 +49,16 @@ extern NSString *const OAUTH2_INSTANCE_DISCOVERY_SUFFIX;
 extern NSString *const OAUTH2_TOKEN_TYPE;
 extern NSString *const OAUTH2_LOGIN_HINT;
 extern NSString *const OAUTH2_ID_TOKEN;
+extern NSString *const OAUTH2_PROFILE_INFO;
 extern NSString *const OAUTH2_CORRELATION_ID_RESPONSE;
 extern NSString *const OAUTH2_CORRELATION_ID_REQUEST;
 extern NSString *const OAUTH2_CORRELATION_ID_REQUEST_VALUE;
 extern NSString *const OAUTH2_SAML11_BEARER_VALUE;
 extern NSString *const OAUTH2_SAML2_BEARER_VALUE;
 extern NSString *const OAUTH2_ASSERTION;
+
+extern NSString *const BROKER_RESPONSE_KEY;
+extern NSString *const BROKER_HASH_KEY;
 
 //Diagnostic traces sent to the Azure Active Directory servers:
 extern NSString *const ADAL_ID_PLATFORM;//The ADAL platform. iOS or OSX
@@ -73,3 +80,7 @@ extern NSString *const AUTH_FAILED_BAD_PARAMETERS;
 extern NSString *const AUTH_FAILED_NO_CLIENTID;
 extern NSString *const AUTH_FAILED_NO_REDIRECTURI;
 extern NSString *const AUTH_FAILED_BUSY;
+
+extern NSString *const AAD_SECURECONVERSATION_LABEL;
+
+extern NSString* const brokerScheme;

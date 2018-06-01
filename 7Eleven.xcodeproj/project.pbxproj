@@ -358,10 +358,12 @@
 			inputPaths = (
 				"${SRCROOT}/Pods/Target Support Files/Pods-7Eleven/Pods-7Eleven-frameworks.sh",
 				"${BUILT_PRODUCTS_DIR}/ADALiOS/ADALiOS.framework",
+				"${BUILT_PRODUCTS_DIR}/NXOAuth2Client/NXOAuth2Client.framework",
 			);
 			name = "[CP] Embed Pods Frameworks";
 			outputPaths = (
 				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ADALiOS.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/NXOAuth2Client.framework",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;

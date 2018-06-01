@@ -24,6 +24,7 @@
 #import "ADWorkPlaceJoin.h"
 #import "ADLogger.h"
 #import "ADErrorCodes.h"
+#import "ADJwtHelper.h"
 
 @implementation ADPkeyAuthHelper
 
@@ -60,57 +61,38 @@
 }
 
 
-+ (nonnull NSString*)createDeviceAuthResponse:(NSString*)authorizationServer
-                                challengeData:(NSDictionary*) challengeData
++ (NSString*) createDeviceAuthResponse:(NSString*) authorizationServer
+                         challengeData:(NSDictionary*) challengeData
+                         challengeType: (ADChallengeType) challengeType
 {
     ADRegistrationInformation *info = [[ADWorkPlaceJoin WorkPlaceJoinManager] getRegistrationInformation];
-    
-    if (!challengeData)
-    {
-        // Error should have been logged before this where there is more information on why the challenge data was bad
-    }
-    else if (![info isWorkPlaceJoined])
-    {
-        AD_LOG_INFO(@"PKeyAuth: Received PKeyAuth request but no WPJ info.", nil);
-    }
-    else
-    {
-        NSString* certAuths = [challengeData valueForKey:@"CertAuthorities"];
-        NSString* expectedThumbprint = [challengeData valueForKey:@"CertThumbprint"];
-        
-        if (certAuths)
-        {
-            NSString* issuerOU = [ADPkeyAuthHelper getOrgUnitFromIssuer:[info certificateIssuer]];
-            if (![self isValidIssuer:certAuths keychainCertIssuer:issuerOU])
-            {
-                AD_LOG_ERROR(@"PKeyAuth Error: Certificate Authority specified by device auth request does not match certificate in keychain.", AD_ERROR_WPJ_REQUIRED, nil);
-                [info releaseData];
-                info = nil;
-            }
-        }
-        else if (expectedThumbprint)
-        {
-            if (![NSString adSame:expectedThumbprint toString:[ADPkeyAuthHelper computeThumbprint:[info certificateData]]])
-            {
-                AD_LOG_ERROR(@"PKeyAuth Error: Certificate Thumbprint does not match certificate in keychain.", AD_ERROR_WPJ_REQUIRED, nil);
-                [info releaseData];
-                info = nil;
-            }
-        }
-    }
-    
+    NSString* authHeaderTemplate = @"PKeyAuth %@ Context=\"%@\", Version=\"%@\"";
     NSString* pKeyAuthHeader = @"";
-    if (info)
-    {
+    BOOL challengeSuccessful = false;
+    
+    if ([info isWorkPlaceJoined]) {
+        if(challengeType == AD_ISSUER){
+            
+            NSString* certAuths = [challengeData valueForKey:@"CertAuthorities"];
+            certAuths = [[certAuths adUrlFormDecode] stringByReplacingOccurrencesOfString:@" "
+                                                                               withString:@""];
+            NSString* issuerOU = [ADPkeyAuthHelper getOrgUnitFromIssuer:[info certificateIssuer]];
+            challengeSuccessful = [self isValidIssuer:certAuths keychainCertIssuer:issuerOU];
+        }else{
+            NSString* expectedThumbprint = [challengeData valueForKey:@"CertThumbprint"];
+            if(expectedThumbprint){
+                challengeSuccessful = [NSString adSame:expectedThumbprint toString:[ADPkeyAuthHelper computeThumbprint:[info certificateData]]];
+            }
+        }
+    }
+    if(challengeSuccessful){
         pKeyAuthHeader = [NSString stringWithFormat:@"AuthToken=\"%@\",", [ADPkeyAuthHelper createDeviceAuthResponse:authorizationServer nonce:[challengeData valueForKey:@"nonce"] identity:info]];
-        
-        [info releaseData];
-        info = nil;
     }
     
-    return [NSString stringWithFormat:@"PKeyAuth %@ Context=\"%@\", Version=\"%@\"", pKeyAuthHeader,[challengeData valueForKey:@"Context"],  [challengeData valueForKey:@"Version"]];
+    [info releaseData];
+    info = nil;
+    return [NSString stringWithFormat:authHeaderTemplate, pKeyAuthHeader,[challengeData valueForKey:@"Context"],  [challengeData valueForKey:@"Version"]];
 }
-
 
 
 + (NSString*) getOrgUnitFromIssuer:(NSString*) issuer{
@@ -165,11 +147,7 @@
                               @"iat" : [NSString stringWithFormat:@"%d", (CC_LONG)[[NSDate date] timeIntervalSince1970]]
                               };
     
-    NSString* signingInput = [NSString stringWithFormat:@"%@.%@", [[self createJSONFromDictionary:header] adBase64UrlEncode], [[self createJSONFromDictionary:payload] adBase64UrlEncode]];
-    NSData* signedData = [self sign:[identity privateKey] data:[signingInput dataUsingEncoding:NSUTF8StringEncoding]];
-    NSString* signedEncodedDataString = [NSString Base64EncodeData: signedData];
-    
-    return [NSString stringWithFormat:@"%@.%@", signingInput, signedEncodedDataString];
+    return [ADJwtHelper createSignedJWTforHeader:header payload:payload signingKey:[identity privateKey]];
 }
 
 +(NSData *) sign: (SecKeyRef) privateKey
@@ -192,7 +170,7 @@
     }
     
     if (!CC_SHA256([plainData bytes], (CC_LONG)[plainData length], hashBytes)) {
-        [ADLogger log:ADAL_LOG_LEVEL_ERROR message:@"Could not compute SHA265 hash." errorCode:AD_ERROR_UNEXPECTED additionalInformation:nil ];
+        [ADLogger log:ADAL_LOG_LEVEL_ERROR message:@"Could not compute SHA265 hash." errorCode:AD_ERROR_UNEXPECTED info:nil ];
         if (hashBytes)
             free(hashBytes);
         if (signedHashBytes)
@@ -207,7 +185,7 @@
                                     signedHashBytes,
                                     &signedHashBytesSize);
     
-    [ADLogger log:ADAL_LOG_LEVEL_INFO message:@"Status returned from data signing - " errorCode:status additionalInformation:nil ];
+    [ADLogger log:ADAL_LOG_LEVEL_INFO message:@"Status returned from data signing - " errorCode:status info:nil ];
     signedHash = [NSData dataWithBytes:signedHashBytes
                                 length:(NSUInteger)signedHashBytesSize];
     
@@ -228,7 +206,7 @@
                                                        options:NSJSONWritingPrettyPrinted
                                                          error:&error];
     if (! jsonData) {
-        [ADLogger log:ADAL_LOG_LEVEL_ERROR message:[NSString stringWithFormat:@"Got an error: %@",error] errorCode:error.code additionalInformation:nil ];
+        [ADLogger log:ADAL_LOG_LEVEL_ERROR message:[NSString stringWithFormat:@"Got an error: %@",error] errorCode:error.code info:nil ];
     } else {
         return [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
     }

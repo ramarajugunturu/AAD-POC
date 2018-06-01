@@ -73,32 +73,31 @@ NSUUID* requestCorrelationId;
     
     switch (level) {
         case ADAL_LOG_LEVEL_ERROR:
-            return @"ADALiOS " ADAL_VERSION_STRING " [%@ - %@] ERROR: %@. Additional Information: %@. ErrorCode: %u.";
+            return @"ADALiOS [%@ - %@] ERROR: %@. Additional Information: %@. ErrorCode: %u.";
             break;
             
         case ADAL_LOG_LEVEL_WARN:
-            return @"ADALiOS " ADAL_VERSION_STRING " [%@ - %@] WARNING: %@. Additional Information: %@. ErrorCode: %u.";
+            return @"ADALiOS [%@ - %@] WARNING: %@. Additional Information: %@. ErrorCode: %u.";
             break;
             
         case ADAL_LOG_LEVEL_INFO:
-            return @"ADALiOS " ADAL_VERSION_STRING " [%@ - %@] INFORMATION: %@. Additional Information: %@. ErrorCode: %u.";
+            return @"ADALiOS [%@ - %@] INFORMATION: %@. Additional Information: %@. ErrorCode: %u.";
             break;
             
         case ADAL_LOG_LEVEL_VERBOSE:
-            return @"ADALiOS " ADAL_VERSION_STRING " [%@ - %@] VERBOSE: %@. Additional Information: %@. ErrorCode: %u.";
+            return @"ADALiOS [%@ - %@] VERBOSE: %@. Additional Information: %@. ErrorCode: %u.";
             break;
             
         default:
-            return @"ADALiOS " ADAL_VERSION_STRING " [%@ - %@] UNKNOWN: %@. Additional Information: %@. ErrorCode: %u.";
+            return @"ADALiOS [%@ - %@] UNKNOWN: %@. Additional Information: %@. ErrorCode: %u.";
             break;
     }
 }
 
-
-+(void) log: (ADAL_LOG_LEVEL)logLevel
-    message: (NSString*) message
-  errorCode: (NSInteger) errorCode
-additionalInformation: (NSString*) additionalInformation
++ (void)log:(ADAL_LOG_LEVEL)logLevel
+    message:(NSString*)message
+  errorCode:(NSInteger)errorCode
+       info:(NSString*)info
 {
     //Note that the logging should not throw, as logging is heavily used in error conditions.
     //Hence, the checks below would rather swallow the error instead of throwing and changing the
@@ -116,17 +115,30 @@ additionalInformation: (NSString*) additionalInformation
         if (sNSLogging)
         {
             //NSLog is documented as thread-safe:
-            NSLog([self formatStringPerLevel:logLevel], [dateFormatter stringFromDate:[NSDate date]], [[ADLogger getCorrelationId] UUIDString], message, additionalInformation, errorCode);
+            NSLog([self formatStringPerLevel:logLevel], [dateFormatter stringFromDate:[NSDate date]], [[ADLogger getCorrelationId] UUIDString], message, info, errorCode);
         }
         
         @synchronized(self)//Guard against thread-unsafe callback and modification of sLogCallback after the check
         {
             if (sLogCallback)
             {
-                sLogCallback(logLevel, [NSString stringWithFormat:@"ADALiOS " ADAL_VERSION_STRING " [%@ - %@] %@", [dateFormatter stringFromDate:[NSDate date]], [[ADLogger getCorrelationId] UUIDString], message], additionalInformation, errorCode);
+                sLogCallback(logLevel, [NSString stringWithFormat:@"ADALiOS [%@ - %@] %@", [dateFormatter stringFromDate:[NSDate date]], [[ADLogger getCorrelationId] UUIDString], message], info, errorCode);
             }
         }
     }
+}
+
++ (void)log:(ADAL_LOG_LEVEL)level
+    message:(NSString*)message
+  errorCode:(NSInteger)code
+     format:(NSString*)format, ...
+{
+    va_list args;
+    va_start(args, format);
+    NSString* info = [[NSString alloc] initWithFormat:format arguments:args];
+    va_end(args);
+    
+    [self log:level message:message errorCode:code info:info];
 }
 
 //Extracts the CPU information according to the constants defined in
@@ -187,24 +199,20 @@ additionalInformation: (NSString*) additionalInformation
 
 +(void) setCorrelationId: (NSUUID*) correlationId
 {
-    @synchronized(self)
-    {
-        requestCorrelationId = correlationId;
-    }
+    requestCorrelationId = correlationId;
 }
 
 +(NSUUID*) getCorrelationId
 {
-    @synchronized(self)
-    {
-        return requestCorrelationId;
-    }
+    if (requestCorrelationId == nil)
+        requestCorrelationId = [NSUUID UUID];
+    
+    return requestCorrelationId;
 }
-
 
 +(NSString*) getAdalVersion
 {
-    return [NSString stringWithFormat:@"%d.%d.%d", ADAL_VER_HIGH, ADAL_VER_LOW, ADAL_VER_PATCH];
+    return ADAL_VERSION_NSSTRING;
 }
 
 +(void) logToken: (NSString*) token

@@ -1,16 +1,29 @@
 PODS:
-  - ADALiOS (1.2.10)
+  - ADALiOS (3.0.0-pre7)
+  - NXOAuth2Client (1.2.8)
 
 DEPENDENCIES:
-  - ADALiOS
+  - ADALiOS (from `https://github.com/AzureAD/azure-activedirectory-library-for-objc.git`, branch `convergence`)
+  - NXOAuth2Client
 
 SPEC REPOS:
   https://github.com/cocoapods/specs.git:
-    - ADALiOS
+    - NXOAuth2Client
+
+EXTERNAL SOURCES:
+  ADALiOS:
+    :branch: convergence
+    :git: https://github.com/AzureAD/azure-activedirectory-library-for-objc.git
+
+CHECKOUT OPTIONS:
+  ADALiOS:
+    :commit: 4abbc075418818d41c525263c9bcf4a3c130cad7
+    :git: https://github.com/AzureAD/azure-activedirectory-library-for-objc.git
 
 SPEC CHECKSUMS:
-  ADALiOS: 505c364827c25dd37811e660a943dace9c0ff094
+  ADALiOS: 810c2fe1f24528224bb99eee254b5c7b7707f7bd
+  NXOAuth2Client: 98c4d4c594edd2b289cfc34a8928653e1dab7adf
 
-PODFILE CHECKSUM: 6ced8f71b60e2facd067ce9b0c92c79554c32663
+PODFILE CHECKSUM: 495aa96e9441b13a6e00fbca6dcfb2e022665729
 
 COCOAPODS: 1.5.2

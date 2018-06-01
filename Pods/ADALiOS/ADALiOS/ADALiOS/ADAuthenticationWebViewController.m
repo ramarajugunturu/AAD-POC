@@ -27,8 +27,8 @@
 #import "ADWorkPlaceJoinConstants.h"
 #import "NSDictionary+ADExtensions.h"
 #import "ADAuthenticationSettings.h"
-#import "ADNTLMHandler.h"
-#import "ADLogger.h"
+#import "ADBrokerKeyHelper.h"
+#import "ADHelpers.h"
 
 @implementation ADAuthenticationWebViewController
 {
@@ -59,7 +59,6 @@ NSTimer *timer;
         _timeout = [[ADAuthenticationSettings sharedInstance] requestTimeOut];
         _webView          = webView;
         _webView.delegate = self;
-        [ADNTLMHandler setCancellationUrl:[_startURL absoluteString]];
     }
     
     return self;
@@ -79,7 +78,7 @@ NSTimer *timer;
 
 - (void)start
 {
-    NSMutableURLRequest* request = [[NSMutableURLRequest alloc] initWithURL:_startURL];
+    NSMutableURLRequest* request = [[NSMutableURLRequest alloc] initWithURL:[ADHelpers addClientVersionToURL:_startURL]];
     [_webView loadRequest:request];
 }
 
@@ -91,18 +90,18 @@ NSTimer *timer;
 {
     
     AD_LOG_VERBOSE(@"Handling PKeyAuth Challenge", nil);
-
+    
     NSArray * parts = [challengeUrl componentsSeparatedByString:@"?"];
     NSString *qp = [parts objectAtIndex:1];
     NSDictionary* queryParamsMap = [NSDictionary adURLFormDecode:qp];
-    NSString* value = [queryParamsMap valueForKey:@"SubmitUrl"];
+    NSString* value = [ADHelpers addClientVersionToURLString:[queryParamsMap valueForKey:@"SubmitUrl"]];
     
     NSArray * authorityParts = [value componentsSeparatedByString:@"?"];
     NSString *authority = [authorityParts objectAtIndex:0];
     
     NSMutableURLRequest* responseUrl = [[NSMutableURLRequest alloc] initWithURL: [NSURL URLWithString: value]];
     
-    NSString* authHeader = [ADPkeyAuthHelper createDeviceAuthResponse:authority challengeData:queryParamsMap];
+    NSString* authHeader = [ADPkeyAuthHelper createDeviceAuthResponse:authority challengeData:queryParamsMap challengeType:AD_ISSUER];
     
     [responseUrl setValue:pKeyAuthHeaderVersion forHTTPHeaderField: pKeyAuthHeader];
     [responseUrl setValue:authHeader forHTTPHeaderField:@"Authorization"];
@@ -117,29 +116,16 @@ NSTimer *timer;
 #pragma unused(webView)
 #pragma unused(navigationType)
     
-    if([ADNTLMHandler isChallengeCancelled]){
-        _complete = YES;
-        dispatch_async( dispatch_get_main_queue(), ^{[_delegate webAuthenticationDidCancel];});
-        return NO;
-    }
-    
     NSString *requestURL = [request.URL absoluteString];
-    
-    if ([requestURL caseInsensitiveCompare:@"about:blank"] == NSOrderedSame)
-    {
-        return NO;
-    }
-    
     if ([[[request.URL scheme] lowercaseString] isEqualToString:@"browser"]) {
         _complete = YES;
         dispatch_async( dispatch_get_main_queue(), ^{[_delegate webAuthenticationDidCancel];});
-        
         requestURL = [requestURL stringByReplacingOccurrencesOfString:@"browser://" withString:@"https://"];
-        [[UIApplication sharedApplication] openURL:[[NSURL alloc] initWithString:requestURL]];
+        dispatch_async( dispatch_get_main_queue(), ^{[[UIApplication sharedApplication] openURL:[[NSURL alloc] initWithString:requestURL]];});
         
         return NO;
     }
-    
+
     // check for pkeyauth challenge.
     if ([requestURL hasPrefix: pKeyAuthUrn] )
     {
@@ -148,8 +134,16 @@ NSTimer *timer;
     }
     
     // Stop at the end URL.
-    if ( [[requestURL lowercaseString] hasPrefix:[_endURL lowercaseString]] )
+    if ([[[request.URL scheme] lowercaseString] isEqualToString:@"msauth"] ||
+        [[requestURL lowercaseString] hasPrefix:[_endURL lowercaseString]] )
     {
+#if AD_BROKER
+        if ([[[request.URL scheme] lowercaseString] isEqualToString:@"msauth"]) {
+            _complete = YES;
+            dispatch_async( dispatch_get_main_queue(), ^{ [_delegate webAuthenticationDidCompleteWithURL:request.URL]; } );
+            return NO;
+        }
+#endif
         // iOS generates a 102, Frame load interrupted error from stopLoading, so we set a flag
         // here to note that it was this code that halted the frame load in order that we can ignore
         // the error when we are notified later.
@@ -159,19 +153,11 @@ NSTimer *timer;
         // This event is explicitly scheduled on the main thread as it is UI related.
         NSAssert( nil != _delegate, @"Delegate object was lost" );
         
-        dispatch_async( dispatch_get_main_queue(), ^{ [_delegate webAuthenticationDidCompleteWithURL:request.URL]; } );
+        NSURL* url = request.URL;
+        
+        dispatch_async( dispatch_get_main_queue(), ^{ [_delegate webAuthenticationDidCompleteWithURL:url]; } );
         
         // Tell the web view that this URL should not be loaded.
-        return NO;
-    }
-    
-    // redirecting to non-https url is not allowed
-    if ([request.URL.scheme caseInsensitiveCompare:@"https"] != NSOrderedSame)
-    {
-        AD_LOG_ERROR(@"Server is redirecting to a non-https url", AD_ERROR_NON_HTTPS_REDIRECT, nil);
-        _complete = YES;
-        ADAuthenticationError* error = [ADAuthenticationError errorFromNonHttpsRedirect];
-        dispatch_async( dispatch_get_main_queue(), ^{ [_delegate webAuthenticationDidFailWithError:error]; } );
         return NO;
     }
     
@@ -208,30 +194,8 @@ NSTimer *timer;
         //See this thread for details: https://discussions.apple.com/thread/1727260
         return;
     }
-
-    // Ignore WebKitError 102 for OAuth 2.0 flow.
-    if ([error.domain isEqual:@"WebKitErrorDomain"] && error.code == 102)
-    {
-        return;
-    }
     
-    // If we failed on an invalid URL check to see if it matches our end URL
-    if ([error.domain isEqualToString:NSURLErrorDomain] && (error.code == NSURLErrorUnsupportedURL || error.code == NSURLErrorCannotFindHost))
-    {
-        NSURL* url = [error.userInfo objectForKey:NSURLErrorFailingURLErrorKey];
-        NSString* urlString = [url absoluteString];
-        if ([[urlString lowercaseString] hasPrefix:_endURL.lowercaseString])
-        {
-            _complete = YES;
-            dispatch_async( dispatch_get_main_queue(), ^{ [_delegate webAuthenticationDidCompleteWithURL:url]; } );
-            return;
-        }
-    }
-    
-    // Prior to iOS 10 the WebView trapped out this error code and didn't pass it along to us
-    // now we have to trap it out ourselves.
-    if ([error.domain isEqualToString:NSCocoaErrorDomain] && error.code == NSUserCancelledError)
-    {
+    if([error.domain isEqual:@"WebKitErrorDomain"]){
         return;
     }
     
@@ -247,11 +211,7 @@ NSTimer *timer;
     if (_delegate)
     {
         AD_LOG_ERROR(@"authorization error", error.code, [error localizedDescription]);
-        if([ADNTLMHandler isChallengeCancelled]){
-            dispatch_async( dispatch_get_main_queue(), ^{ [_delegate webAuthenticationDidCancel]; } );
-        } else{
-            dispatch_async( dispatch_get_main_queue(), ^{ [_delegate webAuthenticationDidFailWithError:error]; } );
-        }
+        dispatch_async( dispatch_get_main_queue(), ^{ [_delegate webAuthenticationDidFailWithError:error]; } );
     }
     else
     {
