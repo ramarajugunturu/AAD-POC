@@ -16,7 +16,6 @@
 // See the Apache License, Version 2.0 for the specific language
 // governing permissions and limitations under the License.
 #import "ADALiOS.h"
-#import <CommonCrypto/CommonDigest.h>
 
 typedef unsigned char byte;
 
@@ -63,7 +62,7 @@ BOOL validBase64Characters(const byte* data, const int size)
 /// See RFC 4648, Section 5 plus switch characters 62 and 63 and no padding.
 /// For a good overview of Base64 encoding, see http://en.wikipedia.org/wiki/Base64
 /// </remarks>
-+ (NSData *)adBase64URLDecodeData:(NSString *)encodedString
++ (NSData *) Base64DecodeData:(NSString *)encodedString
 {
     if ( nil == encodedString )
     {
@@ -158,9 +157,9 @@ BOOL validBase64Characters(const byte* data, const int size)
     return result;
 }
 
-- (NSString *)adBase64UrlDecode
+- (NSString *) adBase64UrlDecode
 {
-    NSData *decodedData = [self.class adBase64URLDecodeData:self];
+    NSData *decodedData = [self.class Base64DecodeData:self];
     
     return [[NSString alloc] initWithData:decodedData encoding:NSUTF8StringEncoding];
 }
@@ -182,7 +181,7 @@ static inline void Encode3bytesTo4bytes(char* output, int b0, int b1, int b2)
 /// See RFC 4648, Section 5 plus switch characters 62 and 63 and no padding.
 /// For a good overview of Base64 encoding, see http://en.wikipedia.org/wiki/Base64
 /// </remarks>
-+ (NSString *)adBase64URLEncodeData:(NSData *)data
++ (NSString *) Base64EncodeData:(NSData *)data
 {
     if ( nil == data )
         return nil;
@@ -258,15 +257,15 @@ static inline void Encode3bytesTo4bytes(char* output, int b0, int b1, int b2)
 }
 
 // Base64 URL encodes a string
-- (NSString *)adBase64UrlEncode
+- (NSString *) adBase64UrlEncode
 {
     NSData *decodedData = [self dataUsingEncoding:NSUTF8StringEncoding];
     
-    return [self.class adBase64URLEncodeData:decodedData];
+    return [self.class Base64EncodeData:decodedData];
 }
 
 /* Caches statically the non-white characterset */
-+ (NSCharacterSet*)nonWhiteCharSet
++(NSCharacterSet*) nonWhiteCharSet
 {
     static NSCharacterSet* nonWhiteCharSet;//Cached instance
     static dispatch_once_t once;
@@ -280,24 +279,48 @@ static inline void Encode3bytesTo4bytes(char* output, int b0, int b1, int b2)
     return nonWhiteCharSet;
 }
 
-+ (BOOL)adIsStringNilOrBlank:(NSString*)string
++(BOOL) adIsStringNilOrBlank: (NSString*)string
 {
     if (!string || !string.length)
-    {
         return YES;
+    else
+    {
+        long nonWhite = [string adFindNonWhiteCharacterAfter:0];
+        return nonWhite >= string.length;
     }
-   
-    NSRange whitespace = [string rangeOfCharacterFromSet:[self nonWhiteCharSet]];
-    return (whitespace.location == NSNotFound);
 }
 
-- (BOOL)adContainsString:(NSString*)contained
+-(BOOL) adContainsString: (NSString*) contained
 {
-    if (!contained || !contained.length)
-    {
+    THROW_ON_NIL_ARGUMENT(contained);
+    if (!contained.length)
         return YES;
-    }
     return [self rangeOfString:contained].location != NSNotFound;
+}
+
+-(long) adFindCharactersFromSet: (NSCharacterSet*) set
+                        start: (long) startIndex
+{
+    THROW_ON_NIL_ARGUMENT(set);
+    long end = self.length;
+    if (startIndex >= end)
+        return end;
+    
+    NSRange toSearch = {.location  = startIndex, .length = (end - startIndex)};
+    long found = [self rangeOfCharacterFromSet:set options:NSLiteralSearch range:toSearch].location;
+    return (found == NSNotFound) ? end : found;
+}
+
+-(long) adFindNonWhiteCharacterAfter: (long) startIndex
+{
+    return [self adFindCharactersFromSet:[NSString nonWhiteCharSet] start:startIndex];
+}
+
+-(long) adFindCharacter:(unichar)toFind start: (long) startIndex
+{
+    NSRange chars = {.location = toFind, .length = 1};
+    NSCharacterSet* set = [NSCharacterSet characterSetWithRange:chars];
+    return [self adFindCharactersFromSet:set start:startIndex];
 }
 
 -(NSString*) adTrimmedString
@@ -368,31 +391,144 @@ static inline void Encode3bytesTo4bytes(char* output, int b0, int b1, int b2)
     return CFBridgingRelease( encodedString );
 }
 
-+ (BOOL)adSame:(NSString*)string1
-      toString:(NSString*)string2
++ (BOOL) adSame: (NSString*) string1
+       toString: (NSString*) string2
 {
     if (!string1)
-    {
         return !string2; //if both are nil, they are equal
-    }
     else
-    {
         return [string1 isEqualToString:string2];
-    }
 }
 
+// Decodes the parameters that come in the Authorization header. We expect them in the following
+// format:
+//
+// <key>="<value>", key="<value>", key="<value>"
+// i.e. version="1.0",CertAuthorities="OU=MyOrganization,CN=MyThingy,DN=windows,DN=net,Context="context!"
+//
+// This parser is lenient on whitespace, and on the presence of enclosing quotation marks. It also
+// will allow commented out quotation marks
 
-- (NSString*) adComputeSHA256
+- (NSDictionary*)authHeaderParams
 {
-    const char* inputStr = [self UTF8String];
-    unsigned char hash[CC_SHA256_DIGEST_LENGTH];
-    CC_SHA256(inputStr, (int)strlen(inputStr), hash);
-    NSMutableString* toReturn = [[NSMutableString alloc] initWithCapacity:CC_SHA256_DIGEST_LENGTH*2];
-    for (int i = 0; i < sizeof(hash)/sizeof(hash[0]); ++i)
+    NSMutableDictionary* params = [NSMutableDictionary new];
+    
+    NSUInteger strLength = [self length];
+    NSRange currentRange = NSMakeRange(0, strLength);
+    NSCharacterSet* whiteChars = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    NSCharacterSet* alphaNum = [NSCharacterSet alphanumericCharacterSet];
+    
+    while (currentRange.location < strLength)
     {
-        [toReturn appendFormat:@"%02x", hash[i]];
+        // Eat up any whitepace at the beginning
+        while (currentRange.location < strLength && [whiteChars characterIsMember:[self characterAtIndex:currentRange.location]])
+        {
+            ++currentRange.location;
+            --currentRange.length;
+        }
+        
+        if (currentRange.location == strLength)
+        {
+            return params;
+        }
+        
+        if (![alphaNum characterIsMember:[self characterAtIndex:currentRange.location]])
+        {
+            // malformed string
+            return nil;
+        }
+        
+        // Find the key
+        NSUInteger found = [self rangeOfString:@"=" options:0 range:currentRange].location;
+        // If there are no keys left then exit out
+        if (found == NSNotFound)
+        {
+            // If there still is string left that means it's malformed
+            if (currentRange.length > 0)
+            {
+                return nil;
+            }
+            
+            // Otherwise we're at the end, return params
+            return params;
+        }
+        NSUInteger length = found - currentRange.location;
+        NSString* key = [self substringWithRange:NSMakeRange(currentRange.location, length)];
+        
+        // don't want the '='
+        ++length;
+        currentRange.location += length;
+        currentRange.length -= length;
+        
+        NSString* value = nil;
+        
+        
+        if ([self characterAtIndex:currentRange.location] == '"')
+        {
+            ++currentRange.location;
+            --currentRange.length;
+            
+            found = currentRange.location;
+            
+            do {
+                NSRange range = NSMakeRange(found, strLength - found);
+                found = [self rangeOfString:@"\"" options:0 range:range].location;
+            } while (found != NSNotFound && [self characterAtIndex:found-1] == '\\');
+            
+            // If we couldn't find a matching closing quote then we have a malformed string and return NULL
+            if (found == NSNotFound)
+            {
+                return nil;
+            }
+            
+            length = found - currentRange.location;
+            value = [self substringWithRange:NSMakeRange(currentRange.location, length)];
+            
+            ++length;
+            currentRange.location += length;
+            currentRange.length -= length;
+            
+            // find the next comma
+            found = [self rangeOfString:@"," options:0 range:currentRange].location;
+            if (found != NSNotFound)
+            {
+                length = found - currentRange.location;
+            }
+            
+        }
+        else
+        {
+            found = [self rangeOfString:@"," options:0 range:currentRange].location;
+            // If we didn't find the comma that means we're at the end of the list
+            if (found == NSNotFound)
+            {
+                length = currentRange.length;
+            }
+            else
+            {
+                length = found - currentRange.location;
+            }
+            
+            value = [self substringWithRange:NSMakeRange(currentRange.location, length)];
+        }
+        
+        NSString* existingValue = [params valueForKey:key];
+        if (existingValue)
+        {
+            [params setValue:[existingValue stringByAppendingFormat:@".%@", value] forKey:key];
+        }
+        else
+        {
+            [params setValue:value forKey:key];
+        }
+        
+        ++length;
+        currentRange.location += length;
+        currentRange.length -= length;
     }
-    return toReturn;
+    
+    
+    return params;
 }
 
 @end

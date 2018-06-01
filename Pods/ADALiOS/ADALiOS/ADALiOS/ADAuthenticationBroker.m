@@ -25,7 +25,7 @@
 #import "ADAuthenticationViewController.h"
 #import "ADAuthenticationBroker.h"
 #import "ADAuthenticationSettings.h"
-#import "ADCustomHeaderHandler.h"
+#import "ADNTLMHandler.h"
 
 NSString *const AD_FAILED_NO_CONTROLLER = @"The Application does not have a current ViewController";
 NSString *const AD_FAILED_NO_RESOURCES  = @"The required resource bundle could not be loaded. Please read the ADALiOS readme on how to build your application with ADAL provided authentication UI resources.";
@@ -39,10 +39,11 @@ NSString *const AD_IPHONE_STORYBOARD = @"ADAL_iPhone_Storyboard";
 // Implementation
 @implementation ADAuthenticationBroker
 {
-    UIViewController*                   _parentController;
-    ADAuthenticationViewController*     _authenticationViewController;
-    ADAuthenticationWebViewController*  _authenticationWebViewController;
+    UIViewController* parentController;
+    ADAuthenticationViewController    *_authenticationViewController;
+    ADAuthenticationWebViewController *_authenticationWebViewController;
     
+    BOOL                               _ntlmSession;
     NSLock                             *_completionLock;
     
     void (^_completionBlock)( ADAuthenticationError *, NSURL *);
@@ -104,6 +105,7 @@ NSString *const AD_IPHONE_STORYBOARD = @"ADAL_iPhone_Storyboard";
     if ( self )
     {
         _completionLock = [[NSLock alloc] init];
+        _ntlmSession = NO;
     }
     
     return self;
@@ -127,20 +129,7 @@ static NSString *_resourcePath = nil;
 // cannot be loaded.
 + (NSBundle *)frameworkBundle
 {
-    static dispatch_once_t once;
-    static NSBundle* bundle = nil;
-    
-    dispatch_once(&once, ^{
-        NSString* adalIosBundle = [[NSBundle mainBundle] pathForResource:@"ADALiOS" ofType:@"bundle"];
-        if (!adalIosBundle)
-        {
-            bundle = [NSBundle bundleForClass:[self class]];
-            return;
-        }
-        bundle = [NSBundle bundleWithPath:adalIosBundle];
-    });
-    
-    return bundle;
+	return [NSBundle bundleForClass:[self class]];
 }
 
 +(NSString*) getStoryboardName
@@ -191,7 +180,6 @@ static NSString *_resourcePath = nil;
 
 - (void)start:(NSURL *)startURL
           end:(NSURL *)endURL
-refreshTokenCredential:(NSString*)refreshTokenCredential
 parentController:(UIViewController *)parent
       webView:(WebViewType *)webView
    fullScreen:(BOOL)fullScreen
@@ -210,13 +198,12 @@ correlationId:(NSUUID *)correlationId
     _completionBlock = [completionBlock copy];
     ADAuthenticationError* error = nil;
     
-	if(![NSString adIsStringNilOrBlank:refreshTokenCredential])
+    _ntlmSession = [ADNTLMHandler startWebViewNTLMHandler:[endURL absoluteString] error:nil];
+    if (_ntlmSession)
     {
-        [ADCustomHeaderHandler addCustomHeaderValue:refreshTokenCredential
-                                       forHeaderKey:@"x-ms-RefreshTokenCredential"
-                                       forSingleUse:YES];
+        AD_LOG_INFO(@"Authorization UI", @"NTLM support enabled.");
     }
-
+    
     if (webView)
     {
         AD_LOG_INFO(@"Authorization UI", @"Use the application provided WebView.");
@@ -247,7 +234,7 @@ correlationId:(NSUUID *)correlationId
         
         if (parent)
         {
-            _parentController = parent;
+            parentController = parent;
             // Load our resource bundle, find the navigation controller for the authentication view, and then the authentication view
             UINavigationController *navigationController = [[self.class storyboard:&error] instantiateViewControllerWithIdentifier:@"LogonNavigator"];
             
@@ -267,8 +254,7 @@ correlationId:(NSUUID *)correlationId
                     // Instead of loading the URL immediately on completion, get the UI on the screen
                     // and then dispatch the call to load the authorization URL
                     dispatch_async( dispatch_get_main_queue(), ^{
-                        [_authenticationViewController startWithURL:startURL
-                                                           endAtURL:endURL];
+                        [_authenticationViewController startWithURL:startURL endAtURL:endURL];
                     });
                 }];
             }
@@ -302,11 +288,6 @@ correlationId:(NSUUID *)correlationId
     [self webAuthenticationDidCancel];
 }
 
-- (BOOL)cancelWithError:(ADAuthenticationError*)error
-{
-    return [self endWebAuthenticationWithError:error orURL:nil];
-}
-
 #pragma mark - Private Methods
 
 - (void)dispatchCompletionBlock:(ADAuthenticationError *)error URL:(NSURL *)url
@@ -318,7 +299,10 @@ correlationId:(NSUUID *)correlationId
     //       be resilient to this condition and should not generate
     //       two callbacks.
     [_completionLock lock];
-    
+    if (_ntlmSession)
+    {
+        [ADNTLMHandler endWebViewNTLMHandler];
+    }
     if ( _completionBlock )
     {
         void (^completionBlock)( ADAuthenticationError *, NSURL *) = _completionBlock;
@@ -334,34 +318,6 @@ correlationId:(NSUUID *)correlationId
 
 #pragma mark - ADAuthenticationDelegate
 
-- (BOOL)endWebAuthenticationWithError:(ADAuthenticationError*) error
-                                orURL:(NSURL*)endURL
-{
-    if ( nil != _authenticationViewController && nil != _parentController)
-    {
-        // Dismiss the authentication view and dispatch the completion block
-        [_parentController dismissViewControllerAnimated:YES completion:^{
-            [self dispatchCompletionBlock:error URL:endURL];
-        }];
-    }
-    else if (nil != _authenticationWebViewController)
-    {
-        [_authenticationWebViewController stop];
-        [self dispatchCompletionBlock:error URL:endURL];
-    }
-    else
-    {
-        return NO;
-    }
-    
-    _parentController = nil;
-    _authenticationViewController    = nil;
-    _authenticationWebViewController = nil;
-    
-    return YES;
-}
-
-
 // The user cancelled authentication
 - (void)webAuthenticationDidCancel
 {
@@ -370,14 +326,44 @@ correlationId:(NSUUID *)correlationId
     // Dispatch the completion block
 
     ADAuthenticationError* error = [ADAuthenticationError errorFromCancellation];
-    [self endWebAuthenticationWithError:error orURL:nil];
+    
+    if ( nil != _authenticationViewController)
+    {
+        // Dismiss the authentication view and dispatch the completion block
+        [parentController dismissViewControllerAnimated:YES completion:^{
+            [self dispatchCompletionBlock:error URL:nil];
+        }];
+    }
+    else
+    {
+        [_authenticationWebViewController stop];
+        [self dispatchCompletionBlock:error URL:nil];
+    }
+    
+    _authenticationViewController    = nil;
+    _authenticationWebViewController = nil;
 }
 
 // Authentication completed at the end URL
 - (void)webAuthenticationDidCompleteWithURL:(NSURL *)endURL
 {
     DebugLog();
-    [self endWebAuthenticationWithError:nil orURL:endURL];
+    
+    if ( nil != _authenticationViewController)
+    {
+        // Dismiss the authentication view and dispatch the completion block
+        [parentController dismissViewControllerAnimated:YES completion:^{
+            [self dispatchCompletionBlock:nil URL:endURL];
+        }];
+    }
+    else
+    {
+        [_authenticationWebViewController stop];
+        [self dispatchCompletionBlock:nil URL:endURL];
+    }
+    
+    _authenticationViewController    = nil;
+    _authenticationWebViewController = nil;
 }
 
 // Authentication failed somewhere
@@ -386,7 +372,21 @@ correlationId:(NSUUID *)correlationId
     // Dispatch the completion block
     ADAuthenticationError* adError = [ADAuthenticationError errorFromNSError:error errorDetails:error.localizedDescription];
     
-    [self endWebAuthenticationWithError:adError orURL:nil];
+    if ( nil != _authenticationViewController)
+    {
+        // Dismiss the authentication view and dispatch the completion block
+        [parentController dismissViewControllerAnimated:YES completion:^{
+            [self dispatchCompletionBlock:adError URL:nil];
+        }];
+    }
+    else
+    {
+        [_authenticationWebViewController stop];
+        [self dispatchCompletionBlock:adError URL:nil];
+    }
+    
+    _authenticationViewController    = nil;
+    _authenticationWebViewController = nil;
 }
 
 @end

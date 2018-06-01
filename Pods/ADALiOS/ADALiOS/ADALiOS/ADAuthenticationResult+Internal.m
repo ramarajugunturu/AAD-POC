@@ -20,32 +20,34 @@
 #import "ADALiOS.h"
 #import "ADAuthenticationResult.h"
 #import "ADAuthenticationResult+Internal.h"
-#import "ADTokenCacheStoreItem+Internal.h"
+#import "ADTokenCacheStoreItem.h"
 #import "ADOAuth2Constants.h"
-#import "ADProfileInfo.h"
+#import "ADUserInformation.h"
 
 @implementation ADAuthenticationResult (Internal)
 
-- (id)initWithCancellation
+-(id) initWithCancellation
 {
     ADAuthenticationError* error = [ADAuthenticationError errorFromCancellation];
     
     return [self initWithError:error status:AD_USER_CANCELLED];
 }
 
-- (id)initWithItem:(ADTokenCacheStoreItem*)item
+-(id) initWithItem: (ADTokenCacheStoreItem*) item
+multiResourceRefreshToken: (BOOL) multiResourceRefreshToken
 {
     self = [super init];
     if (self)
     {
         _status = AD_SUCCEEDED;
         _tokenCacheStoreItem = item;
+        _multiResourceRefreshToken = multiResourceRefreshToken;
     }
     return self;
 }
 
-- (id)initWithError:(ADAuthenticationError*)error
-             status:(ADAuthenticationResultStatus)status
+-(id) initWithError: (ADAuthenticationError*)error
+             status: (ADAuthenticationResultStatus) status
 {
     THROW_ON_NIL_ARGUMENT(error);
     
@@ -59,84 +61,81 @@
 }
 
 /*! Creates an instance of the result from the cache store. */
-+ (ADAuthenticationResult*)resultFromTokenCacheStoreItem:(ADTokenCacheStoreItem*)item
++(ADAuthenticationResult*) resultFromTokenCacheStoreItem: (ADTokenCacheStoreItem*) item
+                               multiResourceRefreshToken: (BOOL) multiResourceRefreshToken
 {
-    if (!item)
+    if (item)
+    {
+        ADAuthenticationError* error;
+        [item extractKeyWithError:&error];
+        if (error)
+        {
+            //Bad item, return error:
+            return [ADAuthenticationResult resultFromError:error];
+        }
+        if ([NSString adIsStringNilOrBlank:item.accessToken])
+        {
+            //Bad item, the access token should be accurate, else an error should be
+            //reported instead of this creator:
+            ADAuthenticationError* error = [ADAuthenticationError unexpectedInternalError:@"ADAuthenticationResult created from item with no access token."];
+            return [ADAuthenticationResult resultFromError:error];
+        }
+        //The item can be used, just use it:
+        return [[ADAuthenticationResult alloc] initWithItem:item multiResourceRefreshToken:multiResourceRefreshToken];
+    }
+    else
     {
         ADAuthenticationError* error = [ADAuthenticationError unexpectedInternalError:@"ADAuthenticationResult created from nil token item."];
         return [ADAuthenticationResult resultFromError:error];
     }
-
-    ADAuthenticationError* error;
-    [item extractKeyWithError:&error];
-    if (error)
-    {
-        //Bad item, return error:
-        return [ADAuthenticationResult resultFromError:error];
-    }
-    
-    if ([NSString adIsStringNilOrBlank:item.token])
-    {
-        //Bad item, the access token should be accurate, else an error should be
-        //reported instead of this creator:
-        ADAuthenticationError* error = [ADAuthenticationError unexpectedInternalError:@"ADAuthenticationResult created from item with no access token."];
-        return [ADAuthenticationResult resultFromError:error];
-    }
-    
-    //The item can be used, just use it:
-    return [[ADAuthenticationResult alloc] initWithItem:item];
 }
 
-+ (ADAuthenticationResult*)resultFromError:(ADAuthenticationError*)error
++(ADAuthenticationResult*) resultFromError: (ADAuthenticationError*) error
 {
     ADAuthenticationResult* result = [ADAuthenticationResult alloc];
     return [result initWithError:error status:AD_FAILED];
 }
 
-+ (ADAuthenticationResult*)resultFromParameterError:(NSString *)details
-{
-    return [[ADAuthenticationResult alloc] initWithError:[ADAuthenticationError invalidArgumentError:@"%@", details] status:AD_FAILED];
-}
-
-+ (ADAuthenticationResult*)resultFromCancellation
++(ADAuthenticationResult*) resultFromCancellation
 {
     ADAuthenticationResult* result = [ADAuthenticationResult alloc];
     return [result initWithCancellation];
 }
 
-+ (ADAuthenticationResult*)resultFromBrokerResponse:(NSDictionary*)response
++(ADAuthenticationResult*) resultFromBrokerResponse: (NSDictionary*) response
 {
+    ADAuthenticationError* error;
+    ADAuthenticationResult* result;
     ADTokenCacheStoreItem* item = nil;
-    
-    if(!response || [response valueForKey:OAUTH2_ERROR_DESCRIPTION])
+    if([response valueForKey:OAUTH2_ERROR_DESCRIPTION]){
+        error = [ADAuthenticationError errorFromNSError:[NSError errorWithDomain:ADBrokerResponseErrorDomain code:0 userInfo:nil] errorDetails:[response valueForKey:OAUTH2_ERROR_DESCRIPTION]];
+    }
+    else
     {
-        ADAuthenticationError* error = nil;
-        NSString* errorDetails = nil;
-        NSInteger errorCode = 0;
-        if (response)
+        item = [ADTokenCacheStoreItem new];
+        item.authority =  [response valueForKey:OAUTH2_AUTHORITY];
+        item.resource = [response valueForKey:OAUTH2_RESOURCE];
+        item.clientId = [response valueForKey:OAUTH2_CLIENT_ID];
+        item.accessToken = [response valueForKey:OAUTH2_ACCESS_TOKEN];
+        if([response valueForKey:OAUTH2_ID_TOKEN])
         {
-            errorDetails = [response valueForKey:OAUTH2_ERROR_DESCRIPTION];
-            errorCode = [[response valueForKey:@"error_code"] integerValue];
-            
-            if (!errorDetails)
+            ADUserInformation* info = [ADUserInformation userInformationWithIdToken:[response valueForKey:OAUTH2_ID_TOKEN] error:&error];
+            if(!error)
             {
-                errorDetails = @"Broker did not provide any details";
+                item.userInformation = info;
             }
         }
-        else
-        {
-            errorDetails = @"No broker response received.";
-        }
-        
-        error = [ADAuthenticationError errorFromNSError:[NSError errorWithDomain:ADBrokerResponseErrorDomain code:errorCode userInfo:nil] errorDetails:errorDetails];
-        
-        return [ADAuthenticationResult resultFromError:error];
+    }
+    if(error)
+    {
+        result = [ADAuthenticationResult resultFromError:error];
+    }
+    else
+    {
+        result = [[ADAuthenticationResult alloc ]initWithItem:item multiResourceRefreshToken:NO];
     }
     
-    item = [ADTokenCacheStoreItem new];
-    [item setTokenType:@"Bearer"];
-    [item fillItemWithResponse:response];
-    return [[ADAuthenticationResult alloc] initWithItem:item];
+    return result;
 }
 
 @end

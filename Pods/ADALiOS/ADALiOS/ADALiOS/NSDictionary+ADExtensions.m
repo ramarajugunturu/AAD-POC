@@ -27,7 +27,7 @@
 // Always returns a dictionary, even if the string is nil, empty or contains no pairs
 + (NSDictionary *)adURLFormDecode:(NSString *)string
 {
-    NSMutableDictionary *parameters = [NSMutableDictionary new];
+    NSMutableDictionary *parameters = [[NSMutableDictionary alloc] initWithCapacity:6];
     
     if ( nil != string && string.length != 0 )
     {
@@ -42,9 +42,7 @@
                 NSString *key     = [[[elements objectAtIndex:0] adTrimmedString] adUrlFormDecode];
                 NSString *value   = [[[elements objectAtIndex:1] adTrimmedString] adUrlFormDecode];
                 if ( nil != key && key.length != 0 )
-                {
                     [parameters setObject:value forKey:key];
-                }
             }
         }
     }

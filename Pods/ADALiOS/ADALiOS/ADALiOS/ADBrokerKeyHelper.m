@@ -20,8 +20,14 @@
 #import "ADAuthenticationError.h"
 #import "ADErrorCodes.h"
 #import "ADBrokerKeyHelper.h"
+#import "ADKeyChainHelper.h"
 #import <CommonCrypto/CommonCryptor.h>
 #import <Security/Security.h>
+
+const CCAlgorithm kAlgorithm = kCCAlgorithmAES128;
+const NSUInteger kAlgorithmKeySize = kCCKeySizeAES128;
+const NSUInteger kAlgorithmBlockSize = kCCBlockSizeAES128;
+const NSUInteger kAlgorithmIVSize = kCCBlockSizeAES128;
 
 @implementation ADBrokerKeyHelper
 
@@ -159,7 +165,7 @@ createKeyIfDoesNotExist: (BOOL) createKeyIfDoesNotExist
                                  error:(ADAuthenticationError* __autoreleasing*) error
 {
     NSData* keyData = [self getBrokerKey: error];
-    NSString *key = [[NSString alloc] initWithData:keyData encoding:NSASCIIStringEncoding];
+    NSString *key = [[NSString alloc] initWithData:keyData encoding:0];
     
     
     // 'key' should be 32 bytes for AES256, will be null-padded otherwise

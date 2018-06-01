@@ -60,9 +60,4 @@
     return _response.statusCode;
 }
 
-- (NSURL*)URL
-{
-    return [_response URL];
-}
-
 @end

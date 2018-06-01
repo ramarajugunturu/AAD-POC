@@ -15,7 +15,6 @@
 //
 // See the Apache License, Version 2.0 for the specific language
 // governing permissions and limitations under the License.
-
 #import "ADALiOS.h"
 #import "ADInstanceDiscovery.h"
 #import "ADAuthenticationError.h"
@@ -136,9 +135,9 @@ NSString* const sValidationServerError = @"The authority validation server retur
     return [NSString stringWithFormat:@"https://%@", fullUrl.host];
 }
 
-- (void)validateAuthority:(NSString*)authority
-            correlationId:(NSUUID*)correlationId
-          completionBlock:(ADDiscoveryCallback) completionBlock;
+-(void) validateAuthority: (NSString*) authority
+            correlationId: (NSUUID*) correlationId
+          completionBlock: (ADDiscoveryCallback) completionBlock;
 {
     API_ENTRY;
     THROW_ON_NIL_ARGUMENT(completionBlock);
@@ -221,7 +220,7 @@ NSString* const sValidationServerError = @"The authority validation server retur
     THROW_ON_NIL_ARGUMENT(correlationId);//Should be set by the caller
     
     //All attempts to complete are done. Now try to validate the authorization ednpoint:
-    NSString* authorizationEndpoint = [authority stringByAppendingString:OAUTH2_AUTHORIZE_V1_SUFFIX];
+    NSString* authorizationEndpoint = [authority stringByAppendingString:OAUTH2_AUTHORIZE_SUFFIX];
     
     NSMutableDictionary *request_data = [NSMutableDictionary dictionaryWithObjectsAndKeys:
                                          sApiVersion, sApiVersionKey,
@@ -236,7 +235,9 @@ NSString* const sValidationServerError = @"The authority validation server retur
     webRequest.method = HTTPGet;
     [webRequest.headers setObject:@"application/json" forKey:@"Accept"];
     [webRequest.headers setObject:@"application/x-www-form-urlencoded" forKey:@"Content-Type"];
-    [[ADClientMetrics getInstance] beginClientMetricsRecordForEndpoint:endPoint correlationId:[correlationId UUIDString] requestHeader:webRequest.headers];
+    
+    __block NSDate* startTime = [NSDate new];
+    [[ADClientMetrics getInstance] addClientMetrics:webRequest.headers endpoint:endPoint];
     
     [webRequest send:^( NSError *error, ADWebResponse *webResponse )
      {
@@ -315,11 +316,17 @@ NSString* const sValidationServerError = @"The authority validation server retur
          
          if(adError)
          {
-             [[ADClientMetrics getInstance] endClientMetricsRecord:[adError description]];
+             [[ADClientMetrics getInstance] endClientMetricsRecord:endPoint
+                                                         startTime:startTime
+                                                     correlationId:correlationId
+                                                      errorDetails:[adError errorDetails]];
          }
          else
          {
-             [[ADClientMetrics getInstance] endClientMetricsRecord:nil];
+             [[ADClientMetrics getInstance] endClientMetricsRecord:endPoint
+                                                         startTime:startTime
+                                                     correlationId:correlationId
+                                                      errorDetails:nil];
          }
          
          completionBlock( verified, adError );

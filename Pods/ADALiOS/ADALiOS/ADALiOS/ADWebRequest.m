@@ -24,10 +24,11 @@
 #import "ADWebRequest.h"
 #import "ADWebResponse.h"
 #import "ADAuthenticationSettings.h"
-#import "ADHelpers.h"
 
 NSString *const HTTPGet  = @"GET";
 NSString *const HTTPPost = @"POST";
+
+static NSOperationQueue *s_queue;
 
 @interface ADWebRequest () <NSURLConnectionDelegate>
 
@@ -46,9 +47,14 @@ NSString *const HTTPPost = @"POST";
     NSHTTPURLResponse   *_response;
     NSMutableData       *_responseData;
     NSUUID              *_correlationId;
-    NSOperationQueue    *_operationQueue;
     
     void (^_completionHandler)( NSError *, ADWebResponse *);
+}
+
++ (void)initialize
+{
+    s_queue = [[NSOperationQueue alloc] init];
+    
 }
 
 #pragma mark - Properties
@@ -102,9 +108,6 @@ NSString *const HTTPPost = @"POST";
         
         _completionHandler = nil;
         _correlationId     = correlationId;
-        
-        _operationQueue    = [[NSOperationQueue alloc] init];
-        [_operationQueue setMaxConcurrentOperationCount:1];
     }
     
     return self;
@@ -113,11 +116,6 @@ NSString *const HTTPPost = @"POST";
 // Cleans up and then calls the completion handler
 - (void)completeWithError:(NSError *)error andResponse:(ADWebResponse *)response
 {
-    if ( _completionHandler != nil )
-    {
-        _completionHandler( error, response );
-    }
-    
     // Cleanup
     _requestURL     = nil;
     _requestMethod  = nil;
@@ -129,7 +127,10 @@ NSString *const HTTPPost = @"POST";
     
     _connection     = nil;
     
-    _completionHandler = nil;
+    if ( _completionHandler != nil )
+    {
+        _completionHandler( error, response );
+    }
 }
 
 - (void)send:(void (^)(NSError *, ADWebResponse *))completionHandler
@@ -162,18 +163,15 @@ NSString *const HTTPPost = @"POST";
         [_requestHeaders setValue:[NSString stringWithFormat:@"%ld", (unsigned long)_requestData.length] forKey:@"Content-Length"];
     }
     
-    NSURL* requestURL = [ADHelpers addClientVersionToURL:_requestURL];
-    
-    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:requestURL
+    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:_requestURL
                                                                 cachePolicy:NSURLRequestReloadIgnoringCacheData
                                                             timeoutInterval:_timeout];
-    
     request.HTTPMethod          = _requestMethod;
     request.allHTTPHeaderFields = _requestHeaders;
     request.HTTPBody            = _requestData;
     
     _connection = [[NSURLConnection alloc] initWithRequest:request delegate:self startImmediately:NO];
-    [_connection setDelegateQueue:_operationQueue];
+    [_connection setDelegateQueue:s_queue];
     [_connection start];
 }
 
@@ -239,12 +237,9 @@ NSString *const HTTPPost = @"POST";
 {
 #pragma unused(connection)
 #pragma unused(redirectResponse)
-    NSURL* requestURL = [request URL];
-    NSURL* modifiedURL = [ADHelpers addClientVersionToURL:requestURL];
-    if (modifiedURL == requestURL)
-        return request;
     
-    return [NSURLRequest requestWithURL:modifiedURL];
+    // Allow redirects
+    return request;
 }
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection

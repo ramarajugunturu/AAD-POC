@@ -27,6 +27,7 @@
 @synthesize tokenCacheStoreItem = _tokenCacheStoreItem;
 @synthesize status = _status;
 @synthesize error = _error;
+@synthesize multiResourceRefreshToken = _multiResourceRefreshToken;
 
 -(id) init
 {
@@ -35,28 +36,10 @@
     return nil;
 }
 
-/* Implements the token property */
--(NSString*) token
+/* Implements the accessToken property */
+-(NSString*) accessToken
 {
-    return self.tokenCacheStoreItem.token;
-}
-
-#define STATUS_ENUM_CASE(_enum) case _enum: return @#_enum;
-
-+ (NSString*)stringForResultStatus:(ADAuthenticationResultStatus)status
-{
-    switch (status)
-    {
-            STATUS_ENUM_CASE(AD_FAILED);
-            STATUS_ENUM_CASE(AD_SUCCEEDED);
-            STATUS_ENUM_CASE(AD_USER_CANCELLED);
-    }
-}
-
-- (NSString*)description
-{
-    return [NSString stringWithFormat:@"(error=%@, status=%@, item=%@)",
-            _error, [ADAuthenticationResult stringForResultStatus:_status], _tokenCacheStoreItem];
+    return self.tokenCacheStoreItem.accessToken;
 }
 
 @end

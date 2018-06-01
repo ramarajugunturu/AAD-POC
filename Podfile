@@ -6,8 +6,8 @@ target '7Eleven' do
   use_frameworks!
 
   # Pods for 7Eleven
-  #pod 'ADALiOS'
-  pod 'ADALiOS', :git => 'https://github.com/AzureAD/azure-activedirectory-library-for-objc.git', :branch=> 'convergence'
+  pod 'ADALiOS'
+  #pod 'ADALiOS', :git => 'https://github.com/AzureAD/azure-activedirectory-library-for-objc.git', :branch=> 'convergence'
   pod 'NXOAuth2Client'
 
   target '7ElevenTests' do

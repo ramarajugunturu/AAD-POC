@@ -18,16 +18,26 @@
 
 //iOS does not support resources in client libraries. Hence putting the
 //version in static define until we identify a better place:
-#define ADAL_VER_HIGH       3
-#define ADAL_VER_LOW        0
-#define ADAL_VER_PATCH      0
+#define ADAL_VER_HIGH   1
+#define ADAL_VER_LOW    2
+#define ADAL_VER_PATCH  9
 
-#define STR_ADAL_VER_HIGH   "3"
-#define STR_ADAL_VER_LOW    "0"
-#define STR_ADAL_VER_PATCH  "0"
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+#define INT_CONCAT_HELPER(x,y) x ## . ## y
+#define INT_CONCAT(x,y) INT_CONCAT_HELPER(x,y)
 
-#define ADAL_VERSION_STRING     STR_ADAL_VER_HIGH "." STR_ADAL_VER_LOW "." STR_ADAL_VER_PATCH "-pre7"
-#define ADAL_VERSION_NSSTRING   @"" STR_ADAL_VER_HIGH "." STR_ADAL_VER_LOW "." STR_ADAL_VER_PATCH "-pre7"
+// Framework versions only support high and low for the double value, sadly.
+#define ADAL_VERSION_NUMBER INT_CONCAT(ADAL_VER_HIGH, ADAL_VER_LOW)
+
+#define ADAL_VERSION_STRING     STR(ADAL_VER_HIGH) "." STR(ADAL_VER_LOW) "." STR(ADAL_VER_PATCH)
+#define ADAL_VERSION_NSSTRING   @"" STR(ADAL_VER_HIGH) "." STR(ADAL_VER_LOW) "." STR(ADAL_VER_PATCH)
+
+#define ADAL_VERSION_HELPER(high, low, patch) adalVersion_ ## high ## _ ## low ## _ ## patch
+#define ADAL_VERSION_(high, low, patch) ADAL_VERSION_HELPER(high, low, patch)
+
+// This is specially crafted so the name of the variable matches the full ADAL version
+#define ADAL_VERSION_VAR ADAL_VERSION_(ADAL_VER_HIGH, ADAL_VER_LOW, ADAL_VER_PATCH)
 
 #import "ADLogger.h"
 #import "ADErrorCodes.h"
@@ -117,15 +127,7 @@ ADAL_VERSION; \
 AD_LOG_VERBOSE(__adalVersion, __where); \
 }
 
-#define API_ENTRY_F(_fmt, ...) { \
-    NSString* _API_STR = [NSString stringWithFormat:@"%s", __PRETTY_FUNCTION__]; \
-    AD_LOG_INFO_F(_API_STR, _fmt, ##__VA_ARGS__); \
-}
 
-#define RETURN_NIL_ERROR(_error, _code, _details) { \
-    ADAuthenticationError* _adError = [ADAuthenticationError errorFromAuthenticationError:_code protocolCode:nil errorDetails:_details]; \
-    if (_error) { *_error = _adError; } \
-    return nil; \
-}
 
-#define RETURN_IF_NOT_NIL(_EXPR) { id _VAL = _EXPR; if (_VAL) { return _VAL; } }
+
+
