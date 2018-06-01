@@ -1,0 +1,16 @@
+PODS:
+  - ADALiOS (1.2.10)
+
+DEPENDENCIES:
+  - ADALiOS
+
+SPEC REPOS:
+  https://github.com/cocoapods/specs.git:
+    - ADALiOS
+
+SPEC CHECKSUMS:
+  ADALiOS: 505c364827c25dd37811e660a943dace9c0ff094
+
+PODFILE CHECKSUM: 6ced8f71b60e2facd067ce9b0c92c79554c32663
+
+COCOAPODS: 1.5.2
