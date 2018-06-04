@@ -51,7 +51,7 @@
 		D290C3EE20C0EB7F000D0256 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		D290C3F020C0EB80000D0256 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D290C3F320C0EB80000D0256 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		D290C3F520C0EB80000D0256 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		D290C3F520C0EB80000D0256 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = 7Eleven/Resources/Info.plist; sourceTree = SOURCE_ROOT; };
 		D290C3FA20C0EB80000D0256 /* 7ElevenTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = 7ElevenTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D290C3FE20C0EB80000D0256 /* _ElevenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = _ElevenTests.swift; sourceTree = "<group>"; };
 		D290C40020C0EB80000D0256 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -112,6 +112,66 @@
 			name = Pods;
 			sourceTree = "<group>";
 		};
+		D23D1DAA20C4EF8700022CD2 /* Utilties */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Utilties;
+			sourceTree = "<group>";
+		};
+		D23D1DAB20C4EFBD00022CD2 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				D290C3F520C0EB80000D0256 /* Info.plist */,
+				D290C3F020C0EB80000D0256 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		D23D1DAC20C4EFC800022CD2 /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Extensions;
+			sourceTree = "<group>";
+		};
+		D23D1DAD20C4F05600022CD2 /* Storyboards */ = {
+			isa = PBXGroup;
+			children = (
+				D290C3F220C0EB80000D0256 /* LaunchScreen.storyboard */,
+				D290C3ED20C0EB7F000D0256 /* Main.storyboard */,
+			);
+			path = Storyboards;
+			sourceTree = "<group>";
+		};
+		D23D1DAE20C4F08F00022CD2 /* ViewControllers */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = ViewControllers;
+			sourceTree = "<group>";
+		};
+		D23D1DAF20C4F0B400022CD2 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		D23D1DB020C4F0C500022CD2 /* Model */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+		D23D1DB120C4F0E500022CD2 /* UIControls */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = UIControls;
+			sourceTree = "<group>";
+		};
 		D290C3DD20C0EB7F000D0256 = {
 			isa = PBXGroup;
 			children = (
@@ -138,11 +198,15 @@
 			isa = PBXGroup;
 			children = (
 				D290C3E920C0EB7F000D0256 /* AppDelegate.swift */,
+				D23D1DB120C4F0E500022CD2 /* UIControls */,
+				D23D1DB020C4F0C500022CD2 /* Model */,
+				D23D1DAF20C4F0B400022CD2 /* Views */,
+				D23D1DAE20C4F08F00022CD2 /* ViewControllers */,
+				D23D1DAD20C4F05600022CD2 /* Storyboards */,
+				D23D1DAC20C4EFC800022CD2 /* Extensions */,
+				D23D1DAB20C4EFBD00022CD2 /* Resources */,
+				D23D1DAA20C4EF8700022CD2 /* Utilties */,
 				D290C3EB20C0EB7F000D0256 /* ViewController.swift */,
-				D290C3ED20C0EB7F000D0256 /* Main.storyboard */,
-				D290C3F020C0EB80000D0256 /* Assets.xcassets */,
-				D290C3F220C0EB80000D0256 /* LaunchScreen.storyboard */,
-				D290C3F520C0EB80000D0256 /* Info.plist */,
 			);
 			path = 7Eleven;
 			sourceTree = "<group>";
@@ -556,7 +620,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = RBL5FW654B;
-				INFOPLIST_FILE = 7Eleven/Info.plist;
+				INFOPLIST_FILE = "$(SRCROOT)/7Eleven/Resources/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 11.3;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -576,7 +640,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = RBL5FW654B;
-				INFOPLIST_FILE = 7Eleven/Info.plist;
+				INFOPLIST_FILE = "$(SRCROOT)/7Eleven/Resources/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 11.3;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
