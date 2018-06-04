@@ -9,7 +9,8 @@ target '7Eleven' do
   pod 'ADALiOS'
   #pod 'ADALiOS', :git => 'https://github.com/AzureAD/azure-activedirectory-library-for-objc.git', :branch=> 'convergence'
   pod 'NXOAuth2Client'
-
+  pod 'Alamofire'
+  
   target '7ElevenTests' do
     inherit! :search_paths
     # Pods for testing
